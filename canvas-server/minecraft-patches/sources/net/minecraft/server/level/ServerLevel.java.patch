@@ -163,6 +163,24 @@
          // CraftBukkit start
          // If we stop due to everyone sleeping we should reset the weather duration to some other random value.
          // Not that everyone ever manages to get the whole server to sleep at the same time....
+@@ -1768,6 +_,17 @@
+             if (this.getCurrentWorldData().captureDrops != null && entity instanceof net.minecraft.world.entity.item.ItemEntity item) { // Folia - region threading
+                 this.getCurrentWorldData().captureDrops.add(item); // Folia - region threading
+                 return true;
+             }
+             // Paper end - capture all item additions to the world
++            // Canvas start - don't spawn items or primed TNT into non-entity-ticking chunks
++            if (this.canvasConfig().entities.preventItemsAndPrimedTntInNonEntityTickingChunks
++                    && spawnReason != null
++                    && (entity instanceof net.minecraft.world.entity.item.ItemEntity || entity instanceof net.minecraft.world.entity.item.PrimedTnt)) {
++                final BlockPos pos = entity.blockPosition();
++                if (ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this, pos.getX() >> 4, pos.getZ() >> 4)
++                        && !this.isPositionEntityTicking(pos)) {
++                    return false;
++                }
++            }
++            // Canvas end - don't spawn items or primed TNT into non-entity-ticking chunks
+             // SPIGOT-6415: Don't call spawn event when reason is null. For example when an entity teleports to a new world.
 @@ -1797,7 +_,7 @@
  
      public void unload(final LevelChunk levelChunk) {

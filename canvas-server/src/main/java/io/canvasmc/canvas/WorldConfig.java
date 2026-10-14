@@ -324,9 +324,17 @@ public class WorldConfig extends Part {
                             case NO_COLLISIONS -> "Disables entity collisions entirely";
                         })
                 );
+
+            option("preventItemsAndPrimedTntInNonEntityTickingChunks")
+                .docs(
+                    "Drops item and primed TNT spawns whose chunk is not entity-ticking.",
+                    "Chunks in that band still tick redstone, so dispensers and TNT would otherwise",
+                    "pile up entities that never tick. Those spawns never appear while this is enabled"
+                );
         }
 
         public boolean fastOrbs = false;
+        public boolean preventItemsAndPrimedTntInNonEntityTickingChunks = false;
 
         public ItemEntities itemEntities = new ItemEntities();
         public static class ItemEntities extends Part {
