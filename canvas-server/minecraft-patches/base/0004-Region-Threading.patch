@@ -13670,6 +13670,41 @@ index fe1fb1e3773e3efe7f228275b8753981db7cfa7a..b7e9f9637827b623f22eb47f3027f917
          try (ProblemReporter.ScopedCollector reporter = new ProblemReporter.ScopedCollector(entity.problemPath(), LOGGER)) {
              TagValueOutput output = TagValueOutput.createWithContext(reporter, entity.registryAccess());
              entity.saveWithoutId(output);
+diff --git a/net/minecraft/advancements/triggers/CuredZombieVillagerTrigger.java b/net/minecraft/advancements/triggers/CuredZombieVillagerTrigger.java
+index 012707a94297915f32341a10bc8b130643958b4d..5c3c181fc75d09690a8384089a5956d7fbbc1949 100644
+--- a/net/minecraft/advancements/triggers/CuredZombieVillagerTrigger.java
++++ b/net/minecraft/advancements/triggers/CuredZombieVillagerTrigger.java
+@@ -25,6 +25,30 @@ public class CuredZombieVillagerTrigger extends SimpleCriterionTrigger<CuredZomb
+         this.trigger(player, t -> t.matches(zombieContext, villagerContext));
+     }
+ 
++    // Canvas start - region threading
++    public java.util.Set<CuredZombieVillagerTrigger.TriggerInstance> matchEntities(final ServerPlayer player, final Zombie zombie, final Villager villager) {
++        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(villager, "Cannot test cured villager async");
++        final LootContext zombieContext = EntityPredicate.createContext(player, zombie);
++        final LootContext villagerContext = EntityPredicate.createContext(player, villager);
++        final java.util.Set<CuredZombieVillagerTrigger.TriggerInstance> matched = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
++        // note: player's listeners are owned by their region, so test every advancement instead
++        for (final net.minecraft.advancements.AdvancementHolder holder : player.level().getServer().getAdvancements().getAllAdvancements()) {
++            for (final Criterion<?> criterion : holder.value().criteria().values()) {
++                if (criterion.trigger() == this
++                    && criterion.triggerInstance() instanceof CuredZombieVillagerTrigger.TriggerInstance instance
++                    && instance.matches(zombieContext, villagerContext)) {
++                    matched.add(instance);
++                }
++            }
++        }
++        return matched;
++    }
++
++    public void trigger(final ServerPlayer player, final java.util.Set<CuredZombieVillagerTrigger.TriggerInstance> matched) {
++        this.trigger(player, matched::contains);
++    }
++    // Canvas end - region threading
++
+     public record TriggerInstance(
+         @Override Optional<Holder<LootItemCondition>> player, Optional<Holder<LootItemCondition>> zombie, Optional<Holder<LootItemCondition>> villager
+     ) implements SimpleCriterionTrigger.SimpleInstance {
 diff --git a/net/minecraft/advancements/triggers/SimpleCriterionTrigger.java b/net/minecraft/advancements/triggers/SimpleCriterionTrigger.java
 index b938e10fe5b5f3aae1d18ee769827535ed543a9c..ad9cb221621148311e7a69009c3fd2a45b3627d5 100644
 --- a/net/minecraft/advancements/triggers/SimpleCriterionTrigger.java
@@ -30719,10 +30754,10 @@ index 574566c08965e600a0b08082d368059bb897e93f..3f9a39447adf0a6f647b695333f676ba
              && !this.isAlliedTo(entity)
              && !livingEntity.is(EntityTypes.ARMOR_STAND)
 diff --git a/net/minecraft/world/entity/monster/zombie/ZombieVillager.java b/net/minecraft/world/entity/monster/zombie/ZombieVillager.java
-index 60c66dba6c868578a49f468da70c1abe973f64f2..cc5ca0f58efbcc4792b86a0454300bcbad2cca05 100644
+index 60c66dba6c868578a49f468da70c1abe973f64f2..1be0e4c2b70892b7b67203dd84d0781d46537932 100644
 --- a/net/minecraft/world/entity/monster/zombie/ZombieVillager.java
 +++ b/net/minecraft/world/entity/monster/zombie/ZombieVillager.java
-@@ -267,7 +267,16 @@ public class ZombieVillager extends Zombie implements VillagerDataHolder {
+@@ -267,7 +267,21 @@ public class ZombieVillager extends Zombie implements VillagerDataHolder {
                  if (this.conversionStarter != null) {
                      Player player = level.getGlobalPlayerByUUID(this.conversionStarter); // Paper - check global player list where appropriate
                      if (player instanceof ServerPlayer serverPlayer) {
@@ -30731,11 +30766,16 @@ index 60c66dba6c868578a49f468da70c1abe973f64f2..cc5ca0f58efbcc4792b86a0454300bcb
 +
 +                        // note: getGlobalPlayerByUUID is overridden in ServerLevel to get
 +                        //       from full player list, not local players like in EntityGetter
-+                        //       so player may be out of region, schedule this
++                        //       so player may be out of region, test the zombie and villager
++                        //       here, and schedule only the award
 +
-+                        serverPlayer.getBukkitEntity().taskScheduler.scheduleOrExecute((ServerPlayer entityPlayer) -> {
-+                            CriteriaTriggers.CURED_ZOMBIE_VILLAGER.trigger(entityPlayer, this, villager);
-+                        });
++                        final java.util.Set<net.minecraft.advancements.triggers.CuredZombieVillagerTrigger.TriggerInstance> matched =
++                            CriteriaTriggers.CURED_ZOMBIE_VILLAGER.matchEntities(serverPlayer, this, villager);
++                        if (!matched.isEmpty()) {
++                            serverPlayer.getBukkitEntity().taskScheduler.scheduleOrExecute((ServerPlayer entityPlayer) -> {
++                                CriteriaTriggers.CURED_ZOMBIE_VILLAGER.trigger(entityPlayer, matched);
++                            });
++                        }
 +                        // Canvas end - region threading
                          level.onReputationEvent(ReputationEventType.ZOMBIE_VILLAGER_CURED, player, villager);
                      }
