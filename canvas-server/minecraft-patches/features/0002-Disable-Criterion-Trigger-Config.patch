@@ -403,7 +403,7 @@ index c282d844fdbc83fc3ea76d66bafdc4c3df6ad6b1..98db736edb9388c3dd4b649f0b1ab3ad
      }
  
 diff --git a/net/minecraft/advancements/triggers/SimpleCriterionTrigger.java b/net/minecraft/advancements/triggers/SimpleCriterionTrigger.java
-index ad9cb221621148311e7a69009c3fd2a45b3627d5..855cfc9a359d9c74a30d0b5e5ce5a926bff33cac 100644
+index d49215f7de97799e9cd63402be0364fd5ae2cd81..90ffa774c11286ff3adc626eb839bd383dbb9e95 100644
 --- a/net/minecraft/advancements/triggers/SimpleCriterionTrigger.java
 +++ b/net/minecraft/advancements/triggers/SimpleCriterionTrigger.java
 @@ -18,6 +18,7 @@ import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
@@ -411,9 +411,9 @@ index ad9cb221621148311e7a69009c3fd2a45b3627d5..855cfc9a359d9c74a30d0b5e5ce5a926
  public abstract class SimpleCriterionTrigger<T extends SimpleCriterionTrigger.SimpleInstance> implements CriterionTrigger<T> {
      protected void trigger(final ServerPlayer player, final Predicate<T> matcher) {
 +        if (player.level().canvasConfig().disableCriterionTrigger) return; // Canvas - disable criterion trigger config
-         ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(player, "Cannot trigger criterion async"); // Canvas - region threading
-         PlayerAdvancements advancements = player.getAdvancements();
-         Map<PlayerAdvancements.TriggerInstanceKey, T> listenersForType = advancements.getTriggerMapForType(this);
+         // Canvas start - region threading
+         if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player)) {
+             ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread("Cannot trigger criterion async");
 diff --git a/net/minecraft/advancements/triggers/SlideDownBlockTrigger.java b/net/minecraft/advancements/triggers/SlideDownBlockTrigger.java
 index 00afc0ff514b724aaab4fd5354824bfddeb78aae..2c42dbe1445bd47ed641e1fb22a93103090cf5f3 100644
 --- a/net/minecraft/advancements/triggers/SlideDownBlockTrigger.java
